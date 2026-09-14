@@ -1,0 +1,169 @@
+{
+  "version": 1,
+  "models": {
+    "gigaam-v3-e2e-ctc-int8": {
+      "id": "gigaam-v3-e2e-ctc-int8",
+      "kind": "gigaam",
+      "name": "GigaAM v3 e2e CTC (int8) — punctuation and number normalization",
+      "lang": ["ru"],
+      "repo": "Smirnov75/GigaAM-v3-sherpa-onnx",
+      "upstream": ["https://huggingface.co/Smirnov75/GigaAM-v3-sherpa-onnx/resolve/6888903da215c7735f51101d939f3bfa679fb2b8/"],
+      "files": {
+        "gigaam_v3_e2e_ctc_int8.onnx": { "size": 319869121, "sha256": "0aacb41f70f0f5aaac4b45dd430337b9e16b180f22c72af04db8516e7609c3c0" },
+        "gigaam_v3_e2e_ctc_tokens.txt": { "size": 2006, "sha256": "f8eb9b115e2748db9c40a5897cae11dd0678cc0b40fd7e25f8c43b3bf28715e4" }
+      }
+    },
+    "gigaam-v3-ctc-int8": {
+      "id": "gigaam-v3-ctc-int8",
+      "kind": "gigaam",
+      "name": "GigaAM v3 CTC (int8) — no punctuation, slightly more accurate words",
+      "lang": ["ru"],
+      "repo": "csukuangfj/sherpa-onnx-nemo-ctc-giga-am-v3-russian-2025-12-16",
+      "upstream": ["https://huggingface.co/csukuangfj/sherpa-onnx-nemo-ctc-giga-am-v3-russian-2025-12-16/resolve/32a4c7cc81809bd132e2d935ab99e9e6ab47fbec/"],
+      "files": {
+        "model.int8.onnx": { "size": 224721476, "sha256": "f86ebfa0429ced91be6054fc344827e9c6c2572f3c318416cd974b06f66437ec" },
+        "tokens.txt": { "size": 196, "sha256": "17cc514451bcceac9c280068c71502f8448f99e9fb1456b8d0761651fd0392f2" }
+      }
+    },
+    "silero-vad": {
+      "id": "silero-vad",
+      "kind": "vad",
+      "name": "Silero VAD",
+      "lang": [],
+      "repo": "k2-fsa/sherpa-onnx (releases/asr-models); bundled with the app",
+      "upstream": ["{base}models/silero-vad/"],
+      "files": {
+        "silero_vad.onnx": { "size": 643854, "sha256": "9e2449e1087496d8d4caba907f23e0bd3f78d91fa552479bb9c23ac09cbb1fd6" }
+      }
+    },
+    "pyannote-segmentation-3-int8": {
+      "id": "pyannote-segmentation-3-int8",
+      "kind": "diar-segmentation",
+      "name": "pyannote segmentation-3.0 (int8)",
+      "lang": [],
+      "repo": "csukuangfj/sherpa-onnx-pyannote-segmentation-3-0; bundled with the app",
+      "upstream": [
+        "{base}models/pyannote-segmentation-3-int8/",
+        "https://huggingface.co/csukuangfj/sherpa-onnx-pyannote-segmentation-3-0/resolve/9403a6902bb58e3d5ae8c7e77c3422de279db2e0/"
+      ],
+      "files": {
+        "model.int8.onnx": { "size": 1540506, "sha256": "d582f4b4c6b48205de7e0643c57df0df5615a3c176189be3fc461e9d18827b5d" }
+      }
+    },
+    "nemo-titanet-small": {
+      "id": "nemo-titanet-small",
+      "kind": "diar-embedding",
+      "name": "NeMo TitaNet small (speaker embeddings, faster)",
+      "lang": [],
+      "repo": "csukuangfj/speaker-embedding-models",
+      "upstream": ["https://huggingface.co/csukuangfj/speaker-embedding-models/resolve/0743f301363dec56491a490f6d6cbc9d67f9a3bf/"],
+      "files": {
+        "nemo_en_titanet_small.onnx": { "size": 40257283, "sha256": "ad4a1802485d8b34c722d2a9d04249662f2ece5d28a7a039063ca22f515a789e" }
+      }
+    },
+    "3dspeaker-eres2net-base-200k": {
+      "id": "3dspeaker-eres2net-base-200k",
+      "kind": "diar-embedding",
+      "name": "3D-Speaker ERes2Net base (speaker embeddings)",
+      "lang": [],
+      "repo": "csukuangfj/speaker-embedding-models",
+      "upstream": ["https://huggingface.co/csukuangfj/speaker-embedding-models/resolve/0743f301363dec56491a490f6d6cbc9d67f9a3bf/"],
+      "files": {
+        "3dspeaker_speech_eres2net_base_200k_sv_zh-cn_16k-common.onnx": { "size": 39593765, "sha256": "e2d2048292e055f7b61cdec3db010503f35369b245bf0b3bbad021c9a91e4053" }
+      }
+    },
+    "whisper-tiny": {
+      "id": "whisper-tiny",
+      "kind": "whisper",
+      "name": "Whisper tiny",
+      "lang": [],
+      "repo": "onnx-community/whisper-tiny",
+      "hfId": "onnx-community/whisper-tiny",
+      "upstream": ["https://huggingface.co/onnx-community/whisper-tiny/resolve/ff4177021cc41f7db950912b73ea4fdf7d01d8e7/"],
+      "files": {
+        "config.json": { "size": 2243, "sha256": null },
+        "generation_config.json": { "size": 3772, "sha256": null },
+        "preprocessor_config.json": { "size": 339, "sha256": null },
+        "tokenizer.json": { "size": 2480466, "sha256": null },
+        "tokenizer_config.json": { "size": 282683, "sha256": null },
+        "onnx/encoder_model_quantized.onnx": { "size": 10124990, "sha256": null },
+        "onnx/decoder_model_merged_quantized.onnx": { "size": 30719241, "sha256": null },
+        "onnx/encoder_model_fp16.onnx": { "size": 16519192, "sha256": null },
+        "onnx/decoder_model_merged_q4.onnx": { "size": 86713702, "sha256": null }
+      },
+      "variants": {
+        "wasm": { "device": "wasm", "dtype": { "encoder_model": "q8", "decoder_model_merged": "q8" }, "files": ["config.json", "generation_config.json", "preprocessor_config.json", "tokenizer.json", "tokenizer_config.json", "onnx/encoder_model_quantized.onnx", "onnx/decoder_model_merged_quantized.onnx"] },
+        "webgpu": { "device": "webgpu", "dtype": { "encoder_model": "fp16", "decoder_model_merged": "q4" }, "files": ["config.json", "generation_config.json", "preprocessor_config.json", "tokenizer.json", "tokenizer_config.json", "onnx/encoder_model_fp16.onnx", "onnx/decoder_model_merged_q4.onnx"] }
+      }
+    },
+    "whisper-base": {
+      "id": "whisper-base",
+      "kind": "whisper",
+      "name": "Whisper base",
+      "lang": [],
+      "repo": "onnx-community/whisper-base",
+      "hfId": "onnx-community/whisper-base",
+      "upstream": ["https://huggingface.co/onnx-community/whisper-base/resolve/1846881b6b3a3024392c1eea3ad983695bc23925/"],
+      "files": {
+        "config.json": { "size": 2243, "sha256": null },
+        "generation_config.json": { "size": 3832, "sha256": null },
+        "preprocessor_config.json": { "size": 339, "sha256": null },
+        "tokenizer.json": { "size": 2480466, "sha256": null },
+        "tokenizer_config.json": { "size": 282682, "sha256": null },
+        "onnx/encoder_model_quantized.onnx": { "size": 23201314, "sha256": null },
+        "onnx/decoder_model_merged_quantized.onnx": { "size": 53693315, "sha256": null },
+        "onnx/encoder_model_fp16.onnx": { "size": 41332612, "sha256": null },
+        "onnx/decoder_model_merged_q4.onnx": { "size": 123602419, "sha256": null }
+      },
+      "variants": {
+        "wasm": { "device": "wasm", "dtype": { "encoder_model": "q8", "decoder_model_merged": "q8" }, "files": ["config.json", "generation_config.json", "preprocessor_config.json", "tokenizer.json", "tokenizer_config.json", "onnx/encoder_model_quantized.onnx", "onnx/decoder_model_merged_quantized.onnx"] },
+        "webgpu": { "device": "webgpu", "dtype": { "encoder_model": "fp16", "decoder_model_merged": "q4" }, "files": ["config.json", "generation_config.json", "preprocessor_config.json", "tokenizer.json", "tokenizer_config.json", "onnx/encoder_model_fp16.onnx", "onnx/decoder_model_merged_q4.onnx"] }
+      }
+    },
+    "whisper-small": {
+      "id": "whisper-small",
+      "kind": "whisper",
+      "name": "Whisper small",
+      "lang": [],
+      "repo": "onnx-community/whisper-small",
+      "hfId": "onnx-community/whisper-small",
+      "upstream": ["https://huggingface.co/onnx-community/whisper-small/resolve/36050c46d777d46dc4b5f43f6d90574fc38f8732/"],
+      "files": {
+        "config.json": { "size": 2227, "sha256": null },
+        "generation_config.json": { "size": 3893, "sha256": null },
+        "preprocessor_config.json": { "size": 339, "sha256": null },
+        "tokenizer.json": { "size": 2480466, "sha256": null },
+        "tokenizer_config.json": { "size": 282683, "sha256": null },
+        "onnx/encoder_model_quantized.onnx": { "size": 92326160, "sha256": null },
+        "onnx/decoder_model_merged_quantized.onnx": { "size": 156750845, "sha256": null },
+        "onnx/encoder_model_fp16.onnx": { "size": 176607756, "sha256": null },
+        "onnx/decoder_model_merged_q4.onnx": { "size": 233149327, "sha256": null }
+      },
+      "variants": {
+        "wasm": { "device": "wasm", "dtype": { "encoder_model": "q8", "decoder_model_merged": "q8" }, "files": ["config.json", "generation_config.json", "preprocessor_config.json", "tokenizer.json", "tokenizer_config.json", "onnx/encoder_model_quantized.onnx", "onnx/decoder_model_merged_quantized.onnx"] },
+        "webgpu": { "device": "webgpu", "dtype": { "encoder_model": "fp16", "decoder_model_merged": "q4" }, "files": ["config.json", "generation_config.json", "preprocessor_config.json", "tokenizer.json", "tokenizer_config.json", "onnx/encoder_model_fp16.onnx", "onnx/decoder_model_merged_q4.onnx"] }
+      }
+    },
+    "whisper-large-v3-turbo": {
+      "id": "whisper-large-v3-turbo",
+      "kind": "whisper",
+      "name": "Whisper large-v3-turbo (WebGPU only)",
+      "lang": [],
+      "repo": "onnx-community/whisper-large-v3-turbo",
+      "hfId": "onnx-community/whisper-large-v3-turbo",
+      "upstream": ["https://huggingface.co/onnx-community/whisper-large-v3-turbo/resolve/360ebcde2559d60bb474678be3c1de9ef347d01a/"],
+      "files": {
+        "config.json": { "size": 1332, "sha256": null },
+        "generation_config.json": { "size": 3897, "sha256": null },
+        "preprocessor_config.json": { "size": 340, "sha256": null },
+        "tokenizer.json": { "size": 2480617, "sha256": null },
+        "tokenizer_config.json": { "size": 282843, "sha256": null },
+        "onnx/encoder_model_q4f16.onnx": { "size": 369974078, "sha256": null },
+        "onnx/decoder_model_merged_q4f16.onnx": { "size": 193505017, "sha256": null }
+      },
+      "variants": {
+        "webgpu": { "device": "webgpu", "dtype": { "encoder_model": "q4f16", "decoder_model_merged": "q4f16" }, "files": ["config.json", "generation_config.json", "preprocessor_config.json", "tokenizer.json", "tokenizer_config.json", "onnx/encoder_model_q4f16.onnx", "onnx/decoder_model_merged_q4f16.onnx"] }
+      }
+    }
+  }
+}

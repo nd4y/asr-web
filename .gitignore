@@ -22,3 +22,10 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# asr-web build artifacts
+public/wasm/
+public/ort/
+wasm/.work/
+wasm/dist/
+public/test/
