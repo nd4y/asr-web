@@ -51,11 +51,10 @@ configs:
           gzip_types application/javascript text/javascript application/wasm application/json text/css image/svg+xml;
           gzip_min_length 1024;
 
-          types {
-              application/wasm wasm;
-              application/javascript js mjs;
-              application/manifest+json webmanifest;
-          }
+          # The stock mime.types (included at http level) already knows wasm/js/json;
+          # a "types {}" block here would REPLACE that table, so only fill the gaps.
+          location ~* \.mjs$ { default_type application/javascript; add_header Cache-Control "public, max-age=604800"; }
+          location ~* \.webmanifest$ { default_type application/manifest+json; add_header Cache-Control "no-cache"; }
 
           # Hashed bundles never change; the sherpa/ORT binaries change only with a release.
           location /assets/ { add_header Cache-Control "public, max-age=31536000, immutable"; }
@@ -67,10 +66,11 @@ configs:
           location = /index.html   { add_header Cache-Control "no-cache"; }
           location = /config.json  { add_header Cache-Control "no-cache"; }
           location = /sw.js        { add_header Cache-Control "no-cache"; }
-          location = /manifest.webmanifest { add_header Cache-Control "no-cache"; }
 
+          # SPA fallback without nginx variables: compose (and Portainer) interpolate "$uri"
+          # away, which turned "try_files $uri /index.html" into a 301 loop on "/".
           location / {
-              try_files $uri $uri/ /index.html;
+              error_page 404 =200 /index.html;
           }
       }
 
