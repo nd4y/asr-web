@@ -1,0 +1,77 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  wasm:
+    name: sherpa-onnx WebAssembly module
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cache the built module by sherpa-onnx tag and build files
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: wasm/dist
+          key: wasm-${{ hashFiles('wasm/build-in-container.sh', 'wasm/CMakeLists.txt', 'wasm/main.cc', 'wasm/esm-wrappers.mjs') }}
+      - name: Build in emscripten/emsdk
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: ./wasm/build.sh
+      - name: ES module wrappers
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: node wasm/esm-wrappers.mjs wasm/dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wasm-dist
+          path: wasm/dist
+          if-no-files-found: error
+
+  web:
+    name: Site
+    needs: wasm
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/download-artifact@v4
+        with:
+          name: wasm-dist
+          path: wasm/dist
+      - run: npm ci
+      - name: Stage the WebAssembly module
+        run: mkdir -p public/wasm && cp wasm/dist/sherpa-onnx-asr-web.js wasm/dist/sherpa-onnx-asr-web.wasm wasm/dist/*.mjs public/wasm/
+      - name: Build (served from /<repo>/ on GitHub Pages)
+        run: npm run build
+        env:
+          VITE_BASE: /${{ github.event.repository.name }}/
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    name: Deploy to GitHub Pages
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: web
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

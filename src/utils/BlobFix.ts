@@ -250,7 +250,10 @@ class WebmBase<T> {
     source?: Uint8Array;
     data?: T;
 
-    constructor(private name = "Unknown", private type = "Unknown") {}
+    constructor(
+        private name = "Unknown",
+        private type = "Unknown",
+    ) {}
 
     updateBySource() {}
 
@@ -316,7 +319,7 @@ class WebmFloat extends WebmBase<number> {
     updateBySource() {
         const byteArray = this.source!.reverse();
         const floatArrayType = this.getFloatArrayType();
-        const floatArray = new floatArrayType(byteArray.buffer);
+        const floatArray = new floatArrayType(byteArray.buffer as ArrayBuffer);
         this.data! = floatArray[0];
     }
     updateByData() {
@@ -505,7 +508,7 @@ class WebmFile extends WebmContainer {
     }
 
     toBlob(type = "video/webm") {
-        return new Blob([this.source!.buffer], { type });
+        return new Blob([this.source!.buffer as ArrayBuffer], { type });
     }
 }
 

@@ -3,17 +3,23 @@ import { useEffect, useRef } from "react";
 export default function AudioPlayer(props: {
     audioUrl: string;
     mimeType: string;
+    onElement?: (el: HTMLAudioElement | null) => void;
 }) {
     const audioPlayer = useRef<HTMLAudioElement>(null);
     const audioSource = useRef<HTMLSourceElement>(null);
 
-    // Updates src when url changes
     useEffect(() => {
         if (audioPlayer.current && audioSource.current) {
             audioSource.current.src = props.audioUrl;
             audioPlayer.current.load();
         }
     }, [props.audioUrl]);
+
+    useEffect(() => {
+        props.onElement?.(audioPlayer.current);
+        return () => props.onElement?.(null);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     return (
         <div className='flex relative z-10 p-4 w-full'>

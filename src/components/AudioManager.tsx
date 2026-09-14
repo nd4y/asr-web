@@ -1,127 +1,15 @@
-import React, { useCallback, useEffect, useState } from "react";
-import axios from "axios";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import Modal from "./modal/Modal";
 import { UrlInput } from "./modal/UrlInput";
 import AudioPlayer from "./AudioPlayer";
 import { TranscribeButton } from "./TranscribeButton";
-import Constants from "../utils/Constants";
 import { Transcriber } from "../hooks/useTranscriber";
 import Progress from "./Progress";
 import AudioRecorder from "./AudioRecorder";
+import { SettingsPanel } from "./SettingsPanel";
+import { formatBytes } from "../config";
 
-function titleCase(str: string) {
-    str = str.toLowerCase();
-    return (str.match(/\w+.?/g) || [])
-        .map((word) => {
-            return word.charAt(0).toUpperCase() + word.slice(1);
-        })
-        .join("");
-}
-
-// List of supported languages:
-// https://help.openai.com/en/articles/7031512-whisper-api-faq
-// https://github.com/openai/whisper/blob/248b6cb124225dd263bb9bd32d060b6517e067f8/whisper/tokenizer.py#L79
-const LANGUAGES = {
-    en: "english",
-    zh: "chinese",
-    de: "german",
-    es: "spanish/castilian",
-    ru: "russian",
-    ko: "korean",
-    fr: "french",
-    ja: "japanese",
-    pt: "portuguese",
-    tr: "turkish",
-    pl: "polish",
-    ca: "catalan/valencian",
-    nl: "dutch/flemish",
-    ar: "arabic",
-    sv: "swedish",
-    it: "italian",
-    id: "indonesian",
-    hi: "hindi",
-    fi: "finnish",
-    vi: "vietnamese",
-    he: "hebrew",
-    uk: "ukrainian",
-    el: "greek",
-    ms: "malay",
-    cs: "czech",
-    ro: "romanian/moldavian/moldovan",
-    da: "danish",
-    hu: "hungarian",
-    ta: "tamil",
-    no: "norwegian",
-    th: "thai",
-    ur: "urdu",
-    hr: "croatian",
-    bg: "bulgarian",
-    lt: "lithuanian",
-    la: "latin",
-    mi: "maori",
-    ml: "malayalam",
-    cy: "welsh",
-    sk: "slovak",
-    te: "telugu",
-    fa: "persian",
-    lv: "latvian",
-    bn: "bengali",
-    sr: "serbian",
-    az: "azerbaijani",
-    sl: "slovenian",
-    kn: "kannada",
-    et: "estonian",
-    mk: "macedonian",
-    br: "breton",
-    eu: "basque",
-    is: "icelandic",
-    hy: "armenian",
-    ne: "nepali",
-    mn: "mongolian",
-    bs: "bosnian",
-    kk: "kazakh",
-    sq: "albanian",
-    sw: "swahili",
-    gl: "galician",
-    mr: "marathi",
-    pa: "punjabi/panjabi",
-    si: "sinhala/sinhalese",
-    km: "khmer",
-    sn: "shona",
-    yo: "yoruba",
-    so: "somali",
-    af: "afrikaans",
-    oc: "occitan",
-    ka: "georgian",
-    be: "belarusian",
-    tg: "tajik",
-    sd: "sindhi",
-    gu: "gujarati",
-    am: "amharic",
-    yi: "yiddish",
-    lo: "lao",
-    uz: "uzbek",
-    fo: "faroese",
-    ht: "haitian creole/haitian",
-    ps: "pashto/pushto",
-    tk: "turkmen",
-    nn: "nynorsk",
-    mt: "maltese",
-    sa: "sanskrit",
-    lb: "luxembourgish/letzeburgesch",
-    my: "myanmar/burmese",
-    bo: "tibetan",
-    tl: "tagalog",
-    mg: "malagasy",
-    as: "assamese",
-    tt: "tatar",
-    haw: "hawaiian",
-    ln: "lingala",
-    ha: "hausa",
-    ba: "bashkir",
-    jw: "javanese",
-    su: "sundanese",
-};
+export const SAMPLING_RATE = 16000;
 
 export enum AudioSource {
     URL = "URL",
@@ -129,7 +17,19 @@ export enum AudioSource {
     RECORDING = "RECORDING",
 }
 
-export function AudioManager(props: { transcriber: Transcriber }) {
+async function decode(data: ArrayBuffer): Promise<AudioBuffer> {
+    const audioCTX = new AudioContext({ sampleRate: SAMPLING_RATE });
+    try {
+        return await audioCTX.decodeAudioData(data);
+    } finally {
+        void audioCTX.close();
+    }
+}
+
+export function AudioManager(props: {
+    transcriber: Transcriber;
+    onAudioElement?: (el: HTMLAudioElement | null) => void;
+}) {
     const [progress, setProgress] = useState<number | undefined>(undefined);
     const [audioData, setAudioData] = useState<
         | {
@@ -137,115 +37,133 @@ export function AudioManager(props: { transcriber: Transcriber }) {
               url: string;
               source: AudioSource;
               mimeType: string;
+              name: string;
           }
         | undefined
     >(undefined);
     const [audioDownloadUrl, setAudioDownloadUrl] = useState<
         string | undefined
     >(undefined);
+    const [decodeError, setDecodeError] = useState<string | undefined>();
+    const [dragging, setDragging] = useState(false);
 
     const isAudioLoading = progress !== undefined;
 
     const resetAudio = () => {
         setAudioData(undefined);
         setAudioDownloadUrl(undefined);
+        setDecodeError(undefined);
     };
 
-    const setAudioFromDownload = async (
-        data: ArrayBuffer,
-        mimeType: string,
-    ) => {
-        const audioCTX = new AudioContext({
-            sampleRate: Constants.SAMPLING_RATE,
-        });
-        const blobUrl = URL.createObjectURL(
-            new Blob([data], { type: "audio/*" }),
-        );
-        const decoded = await audioCTX.decodeAudioData(data);
-        setAudioData({
-            buffer: decoded,
-            url: blobUrl,
-            source: AudioSource.URL,
-            mimeType: mimeType,
-        });
-    };
-
-    const setAudioFromRecording = async (data: Blob) => {
-        resetAudio();
-        setProgress(0);
-        const blobUrl = URL.createObjectURL(data);
-        const fileReader = new FileReader();
-        fileReader.onprogress = (event) => {
-            setProgress(event.loaded / event.total || 0);
-        };
-        fileReader.onloadend = async () => {
-            const audioCTX = new AudioContext({
-                sampleRate: Constants.SAMPLING_RATE,
-            });
-            const arrayBuffer = fileReader.result as ArrayBuffer;
-            const decoded = await audioCTX.decodeAudioData(arrayBuffer);
-            setProgress(undefined);
-            setAudioData({
-                buffer: decoded,
-                url: blobUrl,
-                source: AudioSource.RECORDING,
-                mimeType: data.type,
-            });
-        };
-        fileReader.readAsArrayBuffer(data);
-    };
+    const setAudioFromBlob = useCallback(
+        async (blob: Blob, source: AudioSource, name: string) => {
+            props.transcriber.onInputChange();
+            setDecodeError(undefined);
+            setProgress(0);
+            try {
+                const arrayBuffer = await blob.arrayBuffer();
+                const decoded = await decode(arrayBuffer);
+                setAudioData({
+                    buffer: decoded,
+                    url: URL.createObjectURL(blob),
+                    source,
+                    mimeType: blob.type || "audio/*",
+                    name,
+                });
+            } catch (e) {
+                setAudioData(undefined);
+                setDecodeError(
+                    `Could not decode "${name}": ${e instanceof Error ? e.message : String(e)}. The browser did not recognise the format.`,
+                );
+            } finally {
+                setProgress(undefined);
+            }
+        },
+        [props.transcriber],
+    );
 
     const downloadAudioFromUrl = async (
         requestAbortController: AbortController,
     ) => {
-        if (audioDownloadUrl) {
-            try {
-                setAudioData(undefined);
-                setProgress(0);
-                const { data, headers } = (await axios.get(audioDownloadUrl, {
-                    signal: requestAbortController.signal,
-                    responseType: "arraybuffer",
-                    onDownloadProgress(progressEvent) {
-                        setProgress(progressEvent.progress || 0);
-                    },
-                })) as {
-                    data: ArrayBuffer;
-                    headers: { "content-type": string };
-                };
-
-                let mimeType = headers["content-type"];
-                if (!mimeType || mimeType === "audio/wave") {
-                    mimeType = "audio/wav";
-                }
-                setAudioFromDownload(data, mimeType);
-            } catch (error) {
-                console.log("Request failed or aborted", error);
-            } finally {
-                setProgress(undefined);
+        if (!audioDownloadUrl) return;
+        try {
+            setAudioData(undefined);
+            setDecodeError(undefined);
+            setProgress(0);
+            const res = await fetch(audioDownloadUrl, {
+                signal: requestAbortController.signal,
+            });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const total = Number(res.headers.get("content-length") ?? 0);
+            const chunks: Uint8Array[] = [];
+            let loaded = 0;
+            const reader = res.body!.getReader();
+            for (;;) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                chunks.push(value);
+                loaded += value.length;
+                if (total) setProgress(loaded / total);
             }
+            let mimeType = res.headers.get("content-type") ?? "audio/wav";
+            if (mimeType === "audio/wave") mimeType = "audio/wav";
+            const blob = new Blob(chunks as BlobPart[], { type: mimeType });
+            const name = audioDownloadUrl.split("/").pop() || "audio";
+            await setAudioFromBlob(blob, AudioSource.URL, name);
+        } catch (error) {
+            if (!requestAbortController.signal.aborted) {
+                setDecodeError(
+                    `Could not load ${audioDownloadUrl}: ${error instanceof Error ? error.message : String(error)}. The server must allow cross-origin requests.`,
+                );
+            }
+        } finally {
+            setProgress(undefined);
         }
     };
 
-    // When URL changes, download audio
     useEffect(() => {
         if (audioDownloadUrl) {
             const requestAbortController = new AbortController();
             downloadAudioFromUrl(requestAbortController);
-            return () => {
-                requestAbortController.abort();
-            };
+            return () => requestAbortController.abort();
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [audioDownloadUrl]);
+
+    const onDrop = (e: React.DragEvent) => {
+        e.preventDefault();
+        setDragging(false);
+        const file = e.dataTransfer.files?.[0];
+        if (file) {
+            resetAudio();
+            void setAudioFromBlob(file, AudioSource.FILE, file.name);
+        }
+    };
+
+    const t = props.transcriber;
+    const stageLabel: Record<string, string> = {
+        loading: "Loading models",
+        diarizing: "Separating speakers",
+        transcribing: "Transcribing",
+    };
 
     return (
         <>
-            <div className='flex flex-col justify-center items-center rounded-lg bg-white shadow-xl shadow-black/5 ring-1 ring-slate-700/10'>
+            <div
+                className={`flex flex-col justify-center items-center rounded-lg bg-white shadow-xl shadow-black/5 ring-1 ${dragging ? "ring-2 ring-indigo-500" : "ring-slate-700/10"}`}
+                onDragOver={(e) => {
+                    e.preventDefault();
+                    setDragging(true);
+                }}
+                onDragLeave={() => setDragging(false)}
+                onDrop={onDrop}
+            >
                 <div className='flex flex-row space-x-2 py-2 w-full px-2'>
                     <UrlTile
                         icon={<AnchorIcon />}
                         text={"From URL"}
                         onUrlUpdate={(e) => {
-                            props.transcriber.onInputChange();
+                            resetAudio();
                             setAudioDownloadUrl(e);
                         }}
                     />
@@ -253,14 +171,13 @@ export function AudioManager(props: { transcriber: Transcriber }) {
                     <FileTile
                         icon={<FolderIcon />}
                         text={"From file"}
-                        onFileUpdate={(decoded, blobUrl, mimeType) => {
-                            props.transcriber.onInputChange();
-                            setAudioData({
-                                buffer: decoded,
-                                url: blobUrl,
-                                source: AudioSource.FILE,
-                                mimeType: mimeType,
-                            });
+                        onFile={(file) => {
+                            resetAudio();
+                            void setAudioFromBlob(
+                                file,
+                                AudioSource.FILE,
+                                file.name,
+                            );
                         }}
                     />
                     {navigator.mediaDevices && (
@@ -269,57 +186,93 @@ export function AudioManager(props: { transcriber: Transcriber }) {
                             <RecordTile
                                 icon={<MicrophoneIcon />}
                                 text={"Record"}
-                                setAudioData={(e) => {
-                                    props.transcriber.onInputChange();
-                                    setAudioFromRecording(e);
+                                setAudioData={(blob) => {
+                                    resetAudio();
+                                    void setAudioFromBlob(
+                                        blob,
+                                        AudioSource.RECORDING,
+                                        "recording",
+                                    );
                                 }}
                             />
                         </>
                     )}
                 </div>
-                {
-                    <AudioDataBar
-                        progress={isAudioLoading ? progress : +!!audioData}
-                    />
-                }
+                <AudioDataBar
+                    progress={isAudioLoading ? progress : +!!audioData}
+                />
             </div>
+            {decodeError && (
+                <p className='mt-3 text-sm text-red-700 bg-red-50 rounded-lg px-4 py-2 w-full'>
+                    {decodeError}
+                </p>
+            )}
             {audioData && (
                 <>
                     <AudioPlayer
                         audioUrl={audioData.url}
                         mimeType={audioData.mimeType}
+                        onElement={props.onAudioElement}
                     />
+                    <p className='text-xs text-slate-500 -mt-2 mb-2 px-4 w-full text-left'>
+                        {audioData.name} ·{" "}
+                        {Math.round(audioData.buffer.duration)} s
+                        {audioData.buffer.duration > 7200 && (
+                            <span className='text-amber-700'>
+                                {" "}
+                                · longer than 2 hours: the browser may run out
+                                of memory, consider splitting the file
+                            </span>
+                        )}
+                    </p>
 
                     <div className='relative w-full flex justify-center items-center'>
                         <TranscribeButton
-                            onClick={() => {
-                                props.transcriber.start(audioData.buffer);
-                            }}
-                            isModelLoading={props.transcriber.isModelLoading}
-                            // isAudioLoading ||
-                            isTranscribing={props.transcriber.isBusy}
+                            onClick={() => t.start(audioData.buffer)}
+                            onCancel={t.cancel}
+                            isModelLoading={t.status === "loading"}
+                            isTranscribing={t.isBusy}
+                            disabled={!t.ready}
+                            label={
+                                t.isBusy
+                                    ? `${stageLabel[t.status] ?? t.status}${t.stage ? ` · ${t.stage}` : ""} · ${Math.round(t.elapsed)} s`
+                                    : undefined
+                            }
                         />
-
                         <SettingsTile
                             className='absolute right-4'
-                            transcriber={props.transcriber}
+                            transcriber={t}
                             icon={<SettingsIcon />}
                         />
                     </div>
-                    {props.transcriber.progressItems.length > 0 && (
-                        <div className='relative z-10 p-4 w-full'>
-                            <label>
-                                Loading model files... (only run once)
-                            </label>
-                            {props.transcriber.progressItems.map((data) => (
-                                <div key={data.file}>
-                                    <Progress
-                                        text={data.file}
-                                        percentage={data.progress}
-                                    />
-                                </div>
-                            ))}
-                        </div>
+                    {t.progressItems.filter(
+                        (p) => p.status !== "done" || p.source !== "cache",
+                    ).length > 0 &&
+                        t.status === "loading" && (
+                            <div className='relative z-10 p-4 w-full'>
+                                <label className='text-sm text-slate-600'>
+                                    Loading model files (kept in the browser
+                                    cache for next time)
+                                </label>
+                                {t.progressItems.map((data) => (
+                                    <div key={data.file}>
+                                        <Progress
+                                            text={`${data.file}${data.status === "verifying" ? " · verifying" : ""}${data.status === "error" ? ` · ${data.source} failed, trying next` : ""}${data.source === "cache" ? " · cached" : ""} — ${formatBytes(data.total)}`}
+                                            percentage={
+                                                data.total
+                                                    ? (100 * data.loaded) /
+                                                      data.total
+                                                    : 0
+                                            }
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    {t.error && (
+                        <p className='mt-3 text-sm text-red-700 bg-red-50 rounded-lg px-4 py-2 w-full'>
+                            {t.error}
+                        </p>
                     )}
                 </>
             )}
@@ -333,160 +286,17 @@ function SettingsTile(props: {
     transcriber: Transcriber;
 }) {
     const [showModal, setShowModal] = useState(false);
-
-    const onClick = () => {
-        setShowModal(true);
-    };
-
-    const onClose = () => {
-        setShowModal(false);
-    };
-
-    const onSubmit = (url: string) => {
-        onClose();
-    };
-
     return (
         <div className={props.className}>
-            <Tile icon={props.icon} onClick={onClick} />
-            <SettingsModal
+            <Tile icon={props.icon} onClick={() => setShowModal(true)} />
+            <Modal
                 show={showModal}
-                onSubmit={onSubmit}
-                onClose={onClose}
-                transcriber={props.transcriber}
+                title={"Settings"}
+                content={<SettingsPanel transcriber={props.transcriber} />}
+                onClose={() => setShowModal(false)}
+                onSubmit={() => {}}
             />
         </div>
-    );
-}
-
-function SettingsModal(props: {
-    show: boolean;
-    onSubmit: (url: string) => void;
-    onClose: () => void;
-    transcriber: Transcriber;
-}) {
-    const names = Object.values(LANGUAGES).map(titleCase);
-
-    const models = {
-        // Original checkpoints
-        'Xenova/whisper-tiny': [41, 152],
-        'Xenova/whisper-base': [77, 291],
-        'Xenova/whisper-small': [249],
-        'Xenova/whisper-medium': [776],
-
-        // Distil Whisper (English-only)
-        'distil-whisper/distil-medium.en': [402],
-        'distil-whisper/distil-large-v2': [767],
-    };
-    return (
-        <Modal
-            show={props.show}
-            title={"Settings"}
-            content={
-                <>
-                    <label>Select the model to use.</label>
-                    <select
-                        className='mt-1 mb-1 bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500'
-                        defaultValue={props.transcriber.model}
-                        onChange={(e) => {
-                            props.transcriber.setModel(e.target.value);
-                        }}
-                    >
-                        {Object.keys(models)
-                            .filter(
-                                (key) =>
-                                    props.transcriber.quantized ||
-                                    // @ts-ignore
-                                    models[key].length == 2,
-                            )
-                            .filter(
-                                (key) => (
-                                    !props.transcriber.multilingual || !key.startsWith('distil-whisper/')
-                                )
-                            )
-                            .map((key) => (
-                                <option key={key} value={key}>{`${key}${
-                                    (props.transcriber.multilingual || key.startsWith('distil-whisper/')) ? "" : ".en"
-                                } (${
-                                    // @ts-ignore
-                                    models[key][
-                                        props.transcriber.quantized ? 0 : 1
-                                    ]
-                                }MB)`}</option>
-                            ))}
-                    </select>
-                    <div className='flex justify-between items-center mb-3 px-1'>
-                        <div className='flex'>
-                            <input
-                                id='multilingual'
-                                type='checkbox'
-                                checked={props.transcriber.multilingual}
-                                onChange={(e) => {
-                                    props.transcriber.setMultilingual(
-                                        e.target.checked,
-                                    );
-                                }}
-                            ></input>
-                            <label htmlFor={"multilingual"} className='ms-1'>
-                                Multilingual
-                            </label>
-                        </div>
-                        <div className='flex'>
-                            <input
-                                id='quantize'
-                                type='checkbox'
-                                checked={props.transcriber.quantized}
-                                onChange={(e) => {
-                                    props.transcriber.setQuantized(
-                                        e.target.checked,
-                                    );
-                                }}
-                            ></input>
-                            <label htmlFor={"quantize"} className='ms-1'>
-                                Quantized
-                            </label>
-                        </div>
-                    </div>
-                    {props.transcriber.multilingual && (
-                        <>
-                            <label>Select the source language.</label>
-                            <select
-                                className='mt-1 mb-3 bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500'
-                                defaultValue={props.transcriber.language}
-                                onChange={(e) => {
-                                    props.transcriber.setLanguage(
-                                        e.target.value,
-                                    );
-                                }}
-                            >
-                                {Object.keys(LANGUAGES).map((key, i) => (
-                                    <option key={key} value={key}>
-                                        {names[i]}
-                                    </option>
-                                ))}
-                            </select>
-                            <label>Select the task to perform.</label>
-                            <select
-                                className='mt-1 mb-3 bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500'
-                                defaultValue={props.transcriber.subtask}
-                                onChange={(e) => {
-                                    props.transcriber.setSubtask(
-                                        e.target.value,
-                                    );
-                                }}
-                            >
-                                <option value={"transcribe"}>Transcribe</option>
-                                <option value={"translate"}>
-                                    Translate (to English)
-                                </option>
-                            </select>
-                        </>
-                    )}
-                </>
-            }
-            onClose={props.onClose}
-            onSubmit={() => {}}
-        />
     );
 }
 
@@ -500,9 +310,9 @@ function AudioDataBar(props: { progress: number }) {
 
 function ProgressBar(props: { progress: string }) {
     return (
-        <div className='w-full bg-gray-200 rounded-full h-1 dark:bg-gray-700'>
+        <div className='w-full bg-gray-200 rounded-full h-1'>
             <div
-                className='bg-blue-600 h-1 rounded-full transition-all duration-100'
+                className='bg-indigo-600 h-1 rounded-full transition-all duration-100'
                 style={{ width: props.progress }}
             ></div>
         </div>
@@ -515,108 +325,63 @@ function UrlTile(props: {
     onUrlUpdate: (url: string) => void;
 }) {
     const [showModal, setShowModal] = useState(false);
-
-    const onClick = () => {
-        setShowModal(true);
-    };
-
-    const onClose = () => {
-        setShowModal(false);
-    };
-
-    const onSubmit = (url: string) => {
-        props.onUrlUpdate(url);
-        onClose();
-    };
-
+    const [url, setUrl] = useState("");
     return (
         <>
-            <Tile icon={props.icon} text={props.text} onClick={onClick} />
-            <UrlModal show={showModal} onSubmit={onSubmit} onClose={onClose} />
+            <Tile
+                icon={props.icon}
+                text={props.text}
+                onClick={() => setShowModal(true)}
+            />
+            <Modal
+                show={showModal}
+                title={"From URL"}
+                content={
+                    <>
+                        {
+                            "Enter the URL of the audio file. The server must allow cross-origin requests (CORS)."
+                        }
+                        <UrlInput
+                            onChange={(e) => setUrl(e.target.value)}
+                            value={url}
+                        />
+                    </>
+                }
+                onClose={() => setShowModal(false)}
+                submitText={"Load"}
+                submitEnabled={url.length > 0}
+                onSubmit={() => {
+                    props.onUrlUpdate(url);
+                    setShowModal(false);
+                }}
+            />
         </>
-    );
-}
-
-function UrlModal(props: {
-    show: boolean;
-    onSubmit: (url: string) => void;
-    onClose: () => void;
-}) {
-    const [url, setUrl] = useState(Constants.DEFAULT_AUDIO_URL);
-
-    const onChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-        setUrl(event.target.value);
-    };
-
-    const onSubmit = () => {
-        props.onSubmit(url);
-    };
-
-    return (
-        <Modal
-            show={props.show}
-            title={"From URL"}
-            content={
-                <>
-                    {"Enter the URL of the audio file you want to load."}
-                    <UrlInput onChange={onChange} value={url} />
-                </>
-            }
-            onClose={props.onClose}
-            submitText={"Load"}
-            onSubmit={onSubmit}
-        />
     );
 }
 
 function FileTile(props: {
     icon: JSX.Element;
     text: string;
-    onFileUpdate: (
-        decoded: AudioBuffer,
-        blobUrl: string,
-        mimeType: string,
-    ) => void;
+    onFile: (file: File) => void;
 }) {
-    // const audioPlayer = useRef<HTMLAudioElement>(null);
-
-    // Create hidden input element
-    let elem = document.createElement("input");
-    elem.type = "file";
-    elem.oninput = (event) => {
-        // Make sure we have files to use
-        let files = (event.target as HTMLInputElement).files;
-        if (!files) return;
-
-        // Create a blob that we can use as an src for our audio element
-        const urlObj = URL.createObjectURL(files[0]);
-        const mimeType = files[0].type;
-
-        const reader = new FileReader();
-        reader.addEventListener("load", async (e) => {
-            const arrayBuffer = e.target?.result as ArrayBuffer; // Get the ArrayBuffer
-            if (!arrayBuffer) return;
-
-            const audioCTX = new AudioContext({
-                sampleRate: Constants.SAMPLING_RATE,
-            });
-
-            const decoded = await audioCTX.decodeAudioData(arrayBuffer);
-
-            props.onFileUpdate(decoded, urlObj, mimeType);
-        });
-        reader.readAsArrayBuffer(files[0]);
-
-        // Reset files
-        elem.value = "";
-    };
-
+    const input = useRef<HTMLInputElement>(null);
     return (
         <>
+            <input
+                ref={input}
+                type='file'
+                accept='audio/*,video/*'
+                className='hidden'
+                onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) props.onFile(f);
+                    e.target.value = "";
+                }}
+            />
             <Tile
                 icon={props.icon}
                 text={props.text}
-                onClick={() => elem.click()}
+                onClick={() => input.current?.click()}
             />
         </>
     );
@@ -628,70 +393,36 @@ function RecordTile(props: {
     setAudioData: (data: Blob) => void;
 }) {
     const [showModal, setShowModal] = useState(false);
-
-    const onClick = () => {
-        setShowModal(true);
-    };
-
-    const onClose = () => {
-        setShowModal(false);
-    };
-
-    const onSubmit = (data: Blob | undefined) => {
-        if (data) {
-            props.setAudioData(data);
-            onClose();
-        }
-    };
-
+    const [audioBlob, setAudioBlob] = useState<Blob>();
     return (
         <>
-            <Tile icon={props.icon} text={props.text} onClick={onClick} />
-            <RecordModal
+            <Tile
+                icon={props.icon}
+                text={props.text}
+                onClick={() => setShowModal(true)}
+            />
+            <Modal
                 show={showModal}
-                onSubmit={onSubmit}
-                onClose={onClose}
+                title={"From Recording"}
+                content={
+                    <>
+                        {"Record audio using your microphone"}
+                        <AudioRecorder onRecordingComplete={setAudioBlob} />
+                    </>
+                }
+                onClose={() => {
+                    setShowModal(false);
+                    setAudioBlob(undefined);
+                }}
+                submitText={"Load"}
+                submitEnabled={audioBlob !== undefined}
+                onSubmit={() => {
+                    if (audioBlob) props.setAudioData(audioBlob);
+                    setShowModal(false);
+                    setAudioBlob(undefined);
+                }}
             />
         </>
-    );
-}
-
-function RecordModal(props: {
-    show: boolean;
-    onSubmit: (data: Blob | undefined) => void;
-    onClose: () => void;
-}) {
-    const [audioBlob, setAudioBlob] = useState<Blob>();
-
-    const onRecordingComplete = (blob: Blob) => {
-        setAudioBlob(blob);
-    };
-
-    const onSubmit = () => {
-        props.onSubmit(audioBlob);
-        setAudioBlob(undefined);
-    };
-
-    const onClose = () => {
-        props.onClose();
-        setAudioBlob(undefined);
-    };
-
-    return (
-        <Modal
-            show={props.show}
-            title={"From Recording"}
-            content={
-                <>
-                    {"Record audio using your microphone"}
-                    <AudioRecorder onRecordingComplete={onRecordingComplete} />
-                </>
-            }
-            onClose={onClose}
-            submitText={"Load"}
-            submitEnabled={audioBlob !== undefined}
-            onSubmit={onSubmit}
-        />
     );
 }
 
