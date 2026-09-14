@@ -29,3 +29,4 @@ public/ort/
 wasm/.work/
 wasm/dist/
 public/test/
+stack/.env
