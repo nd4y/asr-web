@@ -5,7 +5,7 @@
 import { loadFiles } from "../../models/loader";
 import {
     normalizeRanges,
-    rangesFromTurns,
+    splitAtSpeakerChanges,
     SAMPLE_RATE,
     type Range,
 } from "../ranges";
@@ -103,11 +103,34 @@ async function loadAsr(msg: LoadAsrMsg) {
             undefined,
             absBase(msg.base),
         );
-        const modelName = names.find((n) => n.endsWith(".onnx"))!;
         const tokensName = names.find((n) => n.endsWith(".txt"))!;
+        // RNNT exports ship encoder/decoder/joiner; CTC exports a single model file.
+        const encoderName = names.find((n) => n.includes("encoder"));
+        const decoderName = names.find((n) => n.includes("decoder"));
+        const joinerName = names.find(
+            (n) => n.includes("joint") || n.includes("joiner"),
+        );
+        const isTransducer = !!(encoderName && decoderName && joinerName);
         post({ type: "stage", stage: "init-asr" });
-        await writeModel("asr.onnx", files.get(modelName)!);
         await writeModel("tokens.txt", files.get(tokensName)!);
+        let modelConfig: Record<string, unknown>;
+        if (isTransducer) {
+            await writeModel("encoder.onnx", files.get(encoderName!)!);
+            await writeModel("decoder.onnx", files.get(decoderName!)!);
+            await writeModel("joiner.onnx", files.get(joinerName!)!);
+            modelConfig = {
+                transducer: {
+                    encoder: "/encoder.onnx",
+                    decoder: "/decoder.onnx",
+                    joiner: "/joiner.onnx",
+                },
+                modelType: "nemo_transducer",
+            };
+        } else {
+            const modelName = names.find((n) => n.endsWith(".onnx"))!;
+            await writeModel("asr.onnx", files.get(modelName)!);
+            modelConfig = { nemoCtc: { model: "/asr.onnx" }, modelType: "" };
+        }
         if (recognizer) {
             recognizer.free();
             recognizer = null;
@@ -116,12 +139,11 @@ async function loadAsr(msg: LoadAsrMsg) {
             {
                 featConfig: { sampleRate: SAMPLE_RATE, featureDim: 80 },
                 modelConfig: {
-                    nemoCtc: { model: "/asr.onnx" },
+                    ...modelConfig,
                     tokens: "/tokens.txt",
                     numThreads: 1,
                     provider: "cpu",
                     debug: 0,
-                    modelType: "",
                     modelingUnit: "",
                     bpeVocab: "",
                 },
@@ -286,14 +308,12 @@ async function transcribe(msg: TranscribeMsg) {
     if (!recognizer) throw new Error("recognizer not loaded");
     const audio = msg.audio;
     const t0 = performance.now();
-    let ranges: Range[];
-    if (msg.turns && msg.turns.length > 0) {
-        post({ type: "stage", stage: "ranges", detail: "from diarization" });
-        ranges = rangesFromTurns(audio, msg.turns);
-    } else {
-        post({ type: "stage", stage: "vad" });
-        ranges = normalizeRanges(audio, runVad(audio));
-    }
+    // Chunks always come from the VAD, bridged into long ranges: recognizing short
+    // speaker turns one by one costs accuracy (measured: 25.8% vs 19.9% word difference
+    // against a GPU reference on a two-person call). Speakers are attached afterwards
+    // from the word timestamps.
+    post({ type: "stage", stage: "vad" });
+    const ranges: Range[] = normalizeRanges(audio, runVad(audio));
     const tVad = (performance.now() - t0) / 1000;
     post({ type: "stage", stage: "asr", detail: `${ranges.length} chunks` });
     const segments: Segment[] = [];
@@ -314,13 +334,8 @@ async function transcribe(msg: TranscribeMsg) {
             start: r.start,
             end: r.end,
             text,
-            speaker: r.speaker,
         };
-        if (
-            msg.wordTimestamps &&
-            Array.isArray(res.tokens) &&
-            Array.isArray(res.timestamps)
-        ) {
+        if (Array.isArray(res.tokens) && Array.isArray(res.timestamps)) {
             const words = tokensToWords(
                 res.tokens,
                 res.timestamps,
@@ -340,13 +355,21 @@ async function transcribe(msg: TranscribeMsg) {
         }
     }
     const tAsr = (performance.now() - t1) / 1000;
+    let out: Segment[] = segments;
+    if (msg.turns && msg.turns.length > 0) {
+        // Split recognized chunks at speaker changes using the word timestamps.
+        out = splitAtSpeakerChanges(segments, msg.turns);
+    }
+    if (!msg.wordTimestamps) {
+        out = out.map(({ words: _w, ...s }) => s);
+    }
     post({
         type: "complete",
         transcript: {
             engine: "gigaam",
             model: recognizerModel,
             language: "ru",
-            segments,
+            segments: out,
             turns: msg.turns,
             timings: { vad: tVad, asr: tAsr },
         },

@@ -13,6 +13,20 @@
         "gigaam_v3_e2e_ctc_tokens.txt": { "size": 2006, "sha256": "f8eb9b115e2748db9c40a5897cae11dd0678cc0b40fd7e25f8c43b3bf28715e4" }
       }
     },
+    "gigaam-v3-e2e-rnnt-int8": {
+      "id": "gigaam-v3-e2e-rnnt-int8",
+      "kind": "gigaam",
+      "name": "GigaAM v3 e2e RNNT (int8) — best accuracy, punctuation",
+      "lang": ["ru"],
+      "repo": "Smirnov75/GigaAM-v3-sherpa-onnx",
+      "upstream": ["https://huggingface.co/Smirnov75/GigaAM-v3-sherpa-onnx/resolve/6888903da215c7735f51101d939f3bfa679fb2b8/"],
+      "files": {
+        "gigaam_v3_e2e_rnnt_encoder_int8.onnx": { "size": 318995997, "sha256": "2cac62d0c270bd128f898f2be1a2d34780d524a6e9483888ebac7b00f97410f1" },
+        "gigaam_v3_e2e_rnnt_decoder.onnx": { "size": 4600058, "sha256": "781971998e6a355d6a714f6932a30eab295e7ba0d14fd7e0f78c83b87e811860" },
+        "gigaam_v3_e2e_rnnt_joint.onnx": { "size": 2712896, "sha256": "602ff7017a93311aad34df1437c8d7f49911353c13d6eae7a6ee7b041339465c" },
+        "gigaam_v3_e2e_rnnt_tokens.txt": { "size": 13353, "sha256": "7ddf22514c42c531358182c81446a8159771e9921019f09ae743ea622d40221d" }
+      }
+    },
     "gigaam-v3-ctc-int8": {
       "id": "gigaam-v3-ctc-int8",
       "kind": "gigaam",
