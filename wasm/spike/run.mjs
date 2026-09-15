@@ -31,6 +31,8 @@ const embVariant = args.emb ?? "eres2net";
 const numSpeakers = args.speakers ? Number(args.speakers) : -1;
 const shift = args.shift ? Number(args.shift) : 0.1;
 const threshold = args.threshold ? Number(args.threshold) : 0.5;
+const chunks = args.chunks ?? "vad";
+const outFile = args.out ?? null;
 
 function readWav(path) {
     const buf = readFileSync(path);
@@ -97,17 +99,74 @@ console.log(`audio ${audioPath}: ${duration.toFixed(1)} s`);
 
 const results = { audio: audioPath, duration };
 
+let preTurns = null;
+if (chunks === "diar") {
+    const emb = {
+        eres2net: "3dspeaker_eres2net_common.onnx",
+        titanet: "nemo_titanet_small.onnx",
+        base200k: "3dspeaker_eres2net_base_200k.onnx",
+    }[embVariant];
+    put(
+        "segmentation.onnx",
+        "sherpa-onnx-pyannote-segmentation-3-0/model.int8.onnx",
+    );
+    put("embedding.onnx", emb);
+    const sd0 = createOfflineSpeakerDiarization(Module, {
+        segmentation: {
+            pyannote: { model: "/segmentation.onnx", windowShiftRatio: shift },
+            numThreads: 1,
+            debug: 0,
+            provider: "cpu",
+        },
+        embedding: {
+            model: "/embedding.onnx",
+            numThreads: 1,
+            debug: 0,
+            provider: "cpu",
+        },
+        clustering: {
+            numClusters: numSpeakers,
+            threshold,
+            computeConfidence: 0,
+        },
+        minDurationOn: 0.3,
+        minDurationOff: 0.5,
+    });
+    preTurns = sd0.process(audio).sort((a, b) => a.start - b.start);
+    sd0.free();
+    console.log(`diarization-first: ${preTurns.length} turns`);
+}
 if (!args["no-asr"]) {
-    const model =
-        asrVariant === "e2e"
-            ? "gigaam_v3_e2e_ctc_int8.onnx"
-            : "gigaam_v3_ctc_int8.onnx";
-    const tokens =
-        asrVariant === "e2e"
-            ? "gigaam_v3_e2e_ctc_tokens.txt"
-            : "gigaam_v3_ctc_tokens.txt";
+    const variants = {
+        e2e: {
+            ctc: "gigaam_v3_e2e_ctc_int8.onnx",
+            tokens: "gigaam_v3_e2e_ctc_tokens.txt",
+        },
+        "e2e-fp32": {
+            ctc: "gigaam_v3_e2e_ctc.onnx",
+            tokens: "gigaam_v3_e2e_ctc_tokens.txt",
+        },
+        ctc: {
+            ctc: "gigaam_v3_ctc_int8.onnx",
+            tokens: "gigaam_v3_ctc_tokens.txt",
+        },
+        rnnt: {
+            encoder: "gigaam_v3_e2e_rnnt_encoder_int8.onnx",
+            decoder: "gigaam_v3_e2e_rnnt_decoder.onnx",
+            joiner: "gigaam_v3_e2e_rnnt_joint.onnx",
+            tokens: "gigaam_v3_e2e_rnnt_tokens.txt",
+        },
+    };
+    const v = variants[asrVariant];
+    const model = v.ctc ?? v.encoder;
+    const tokens = v.tokens;
     put("silero_vad.onnx", "silero_vad.onnx");
-    put("asr.onnx", model);
+    if (v.ctc) put("asr.onnx", v.ctc);
+    else {
+        put("encoder.onnx", v.encoder);
+        put("decoder.onnx", v.decoder);
+        put("joiner.onnx", v.joiner);
+    }
     put("tokens.txt", tokens);
 
     let t = performance.now();
@@ -150,6 +209,49 @@ if (!args["no-asr"]) {
         segments.push(s);
         vad.pop();
     }
+    if (preTurns) {
+        // Ranges = speaker turns bridged like the app does (same speaker, gap <= 0.8 s, <= 23.5 s), padded 0.25 s.
+        const merged = [];
+        for (const t of preTurns) {
+            const last = merged[merged.length - 1];
+            if (
+                last &&
+                last.speaker === t.speaker &&
+                t.start - last.end <= 0.8 &&
+                t.end - last.start <= 23.5
+            )
+                last.end = t.end;
+            else merged.push({ ...t });
+        }
+        segments.length = 0;
+        for (const m of merged) {
+            const a = Math.max(0, Math.floor((m.start - 0.25) * 16000)),
+                b = Math.min(audio.length, Math.floor((m.end + 0.25) * 16000));
+            segments.push({ start: a, samples: audio.subarray(a, b) });
+        }
+    }
+    if (chunks.startsWith("bridge")) {
+        const maxLen = Number(chunks.split(":")[1] ?? 20),
+            bridge = Number(chunks.split(":")[2] ?? 0.8);
+        const merged = [];
+        for (const sg of segments) {
+            const last = merged[merged.length - 1];
+            const end = sg.start + sg.samples.length;
+            if (
+                last &&
+                (sg.start - last.end) / 16000 <= bridge &&
+                (end - last.start) / 16000 <= maxLen
+            )
+                last.end = end;
+            else merged.push({ start: sg.start, end });
+        }
+        segments.length = 0;
+        for (const m of merged)
+            segments.push({
+                start: m.start,
+                samples: audio.subarray(m.start, m.end),
+            });
+    }
     const vadTime = (performance.now() - t) / 1000;
     const speech = segments.reduce((a, s) => a + s.samples.length, 0) / 16000;
     console.log(
@@ -161,12 +263,20 @@ if (!args["no-asr"]) {
         {
             featConfig: { sampleRate: 16000, featureDim: 80 },
             modelConfig: {
-                nemoCtc: { model: "/asr.onnx" },
+                ...(v.ctc
+                    ? { nemoCtc: { model: "/asr.onnx" } }
+                    : {
+                          transducer: {
+                              encoder: "/encoder.onnx",
+                              decoder: "/decoder.onnx",
+                              joiner: "/joiner.onnx",
+                          },
+                      }),
                 tokens: "/tokens.txt",
                 numThreads: 1,
                 provider: "cpu",
                 debug: 0,
-                modelType: "",
+                modelType: v.ctc ? "" : "nemo_transducer",
                 modelingUnit: "",
                 bpeVocab: "",
             },
@@ -209,6 +319,11 @@ if (!args["no-asr"]) {
     );
     for (const x of texts.slice(0, 6))
         console.log(`  [${x.start.toFixed(1)}-${x.end.toFixed(1)}] ${x.text}`);
+    if (outFile) {
+        const { writeFileSync } = await import("node:fs");
+        writeFileSync(outFile, texts.map((x) => x.text).join("\n") + "\n");
+        console.log(`text -> ${outFile}`);
+    }
     Object.assign(results, {
         asr: {
             model,

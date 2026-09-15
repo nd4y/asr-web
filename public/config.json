@@ -3,7 +3,7 @@
   "manifest": "models/manifest.json",
   "defaults": {
     "engine": "gigaam",
-    "gigaamModel": "gigaam-v3-e2e-ctc-int8",
+    "gigaamModel": "gigaam-v3-e2e-rnnt-int8",
     "whisperModel": "whisper-small",
     "language": "ru",
     "diarize": false,

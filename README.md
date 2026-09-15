@@ -15,10 +15,15 @@ loader with mirrors and checksums, diarization, and SRT/VTT export.
 - **Input**: audio or video file (drag and drop works), URL, or microphone recording. Anything
   the browser can decode: wav, mp3, m4a/aac, ogg/opus, webm, flac, mp4.
 - **Engines**
-  - `gigaam` — [GigaAM v3](https://github.com/salute-developers/GigaAM) CTC models via
-    sherpa-onnx WebAssembly. Russian only. The default `e2e` model outputs punctuation and
-    normalized numbers. Single-threaded WASM runs at roughly 0.15–0.25× real time on a laptop
-    (a 7-minute call in about a minute).
+  - `gigaam` — [GigaAM v3](https://github.com/salute-developers/GigaAM) models via
+    sherpa-onnx WebAssembly. Russian only. The default is the `e2e` **RNNT** model: it
+    outputs punctuation and normalized numbers and is the most accurate of the exports (on a
+    two-person phone call its output differs from a GPU RNNT reference by 14% of words,
+    against 20% for the `e2e` CTC model and 25% when the audio is cut at every speaker turn —
+    which is why chunks always come from the VAD and speakers are attached afterwards).
+    Single-threaded WASM runs at roughly 0.15–0.25× real time on a laptop (a 7-minute call in
+    about a minute); RNNT costs no more than CTC here. fp32 weights were measured too: about
+    one point better than int8 for twice the time and 1.1 GB of memory, so they are not offered.
   - `whisper` — [Transformers.js](https://github.com/huggingface/transformers.js) with WebGPU
     when available, WASM otherwise. tiny / base / small everywhere, large-v3-turbo on WebGPU.
 - **Diarization** (optional, any engine): pyannote segmentation-3.0 + speaker embeddings
