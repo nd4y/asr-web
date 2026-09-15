@@ -92,8 +92,12 @@ async function downloadFrom(
         } else if (loaded === 0 && !res.ok) {
             throw new Error(`HTTP ${res.status}`);
         }
+        // With a compressed transfer (GitHub Pages gzips .onnx) content-length is the
+        // compressed size, so the early check only applies to identity responses; the
+        // final byte count and sha256 are checked either way.
         const len = Number(res.headers.get("content-length") ?? 0);
-        if (loaded === 0 && len && len !== total) {
+        const encoded = !!res.headers.get("content-encoding");
+        if (loaded === 0 && !encoded && len && len !== total) {
             throw new Error(
                 `size mismatch: expected ${total}, server reports ${len}`,
             );
@@ -123,6 +127,8 @@ async function downloadFrom(
             await new Promise((r) => setTimeout(r, 1000 * attempt));
         }
     }
+    if (loaded !== total)
+        throw new Error(`incomplete download: ${loaded} of ${total} bytes`);
     return out;
 }
 
