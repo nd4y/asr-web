@@ -9,7 +9,10 @@ export async function decodeAudio(
         /\.(mp[123]|mpeg)(?:\?.*)?$/i.test(name) ||
         /audio\/(mpeg|mp3)/i.test(blob.type) ||
         (header[0] === 0x49 && header[1] === 0x44 && header[2] === 0x33) ||
-        (header[0] === 0xff && (header[1] & 0xe0) === 0xe0 && (header[1] & 0x06) !== 0 && ((header[1] >> 3) & 3) !== 1);
+        (header[0] === 0xff &&
+            (header[1] & 0xe0) === 0xe0 &&
+            (header[1] & 0x06) !== 0 &&
+            ((header[1] >> 3) & 3) !== 1);
     if (signal.aborted) throw new DOMException("Cancelled", "AbortError");
     const wave =
         (header[0] === 0x52 &&
