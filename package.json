@@ -11,6 +11,7 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tsc": "tsc",
+    "test:audio": "node scripts/test-audio.mjs && node scripts/test-decode.mjs",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\" \"scripts/**/*.mjs\" \"wasm/**/*.mjs\"",
     "icons": "node scripts/make-icons.mjs",
     "wasm": "./wasm/build.sh",
@@ -19,6 +20,7 @@
   "dependencies": {
     "@headlessui/react": "^1.7.19",
     "@huggingface/transformers": "^4.2.0",
+    "mpg123-decoder": "^1.0.3",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

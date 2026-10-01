@@ -8,6 +8,7 @@ import Progress from "./Progress";
 import AudioRecorder from "./AudioRecorder";
 import { SettingsPanel } from "./SettingsPanel";
 import { formatBytes } from "../config";
+import { decodeAudio } from "../audio/decode";
 
 export const SAMPLING_RATE = 16000;
 
@@ -15,15 +16,6 @@ export enum AudioSource {
     URL = "URL",
     FILE = "FILE",
     RECORDING = "RECORDING",
-}
-
-async function decode(data: ArrayBuffer): Promise<AudioBuffer> {
-    const audioCTX = new AudioContext({ sampleRate: SAMPLING_RATE });
-    try {
-        return await audioCTX.decodeAudioData(data);
-    } finally {
-        void audioCTX.close();
-    }
 }
 
 export function AudioManager(props: {
@@ -47,9 +39,22 @@ export function AudioManager(props: {
     const [decodeError, setDecodeError] = useState<string | undefined>();
     const [dragging, setDragging] = useState(false);
 
+    const decodeController = useRef<AbortController>();
+    const objectUrl = useRef<string>();
+    useEffect(
+        () => () => {
+            decodeController.current?.abort();
+            if (objectUrl.current) URL.revokeObjectURL(objectUrl.current);
+        },
+        [],
+    );
     const isAudioLoading = progress !== undefined;
 
     const resetAudio = () => {
+        decodeController.current?.abort();
+        setProgress(undefined);
+        if (objectUrl.current) URL.revokeObjectURL(objectUrl.current);
+        objectUrl.current = undefined;
         setAudioData(undefined);
         setAudioDownloadUrl(undefined);
         setDecodeError(undefined);
@@ -57,26 +62,38 @@ export function AudioManager(props: {
 
     const setAudioFromBlob = useCallback(
         async (blob: Blob, source: AudioSource, name: string) => {
+            decodeController.current?.abort();
+            const controller = new AbortController();
+            decodeController.current = controller;
+            if (objectUrl.current) URL.revokeObjectURL(objectUrl.current);
+            objectUrl.current = undefined;
             props.transcriber.onInputChange();
             setDecodeError(undefined);
             setProgress(0);
             try {
-                const arrayBuffer = await blob.arrayBuffer();
-                const decoded = await decode(arrayBuffer);
+                const decoded = await decodeAudio(
+                    blob,
+                    name,
+                    setProgress,
+                    controller.signal,
+                );
+                if (controller.signal.aborted) return;
+                objectUrl.current = URL.createObjectURL(blob);
                 setAudioData({
                     buffer: decoded,
-                    url: URL.createObjectURL(blob),
+                    url: objectUrl.current,
                     source,
                     mimeType: blob.type || "audio/*",
                     name,
                 });
             } catch (e) {
+                if (controller.signal.aborted) return;
                 setAudioData(undefined);
                 setDecodeError(
-                    `Could not decode "${name}": ${e instanceof Error ? e.message : String(e)}. The browser did not recognise the format.`,
+                    `Could not decode "${name}": ${e instanceof Error ? e.message : String(e)}. Try another encoding or check available memory.`,
                 );
             } finally {
-                setProgress(undefined);
+                if (!controller.signal.aborted) setProgress(undefined);
             }
         },
         [props.transcriber],
@@ -220,8 +237,8 @@ export function AudioManager(props: {
                         {audioData.buffer.duration > 7200 && (
                             <span className='text-amber-700'>
                                 {" "}
-                                · longer than 2 hours: the browser may run out
-                                of memory, consider splitting the file
+                                · long recording: keep this tab open while
+                                processing
                             </span>
                         )}
                     </p>

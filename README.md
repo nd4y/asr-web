@@ -120,3 +120,16 @@ GigaAM (MIT), Whisper (MIT), Silero VAD (MIT), pyannote segmentation-3.0 (MIT), 
 (CC-BY-4.0), 3D-Speaker (Apache-2.0). ONNX exports of GigaAM v3 for sherpa-onnx by
 [Smirnov75](https://huggingface.co/Smirnov75/GigaAM-v3-sherpa-onnx) and
 [csukuangfj](https://huggingface.co/csukuangfj).
+
+### Long recordings
+
+MP3 and PCM/IEEE-float WAV (including RF64) are read in bounded blocks in a
+worker, mixed to mono and resampled to 16 kHz before storage. Four-hour MP3
+recordings at 48 kHz stereo are supported and tested. No recording is uploaded.
+The final audio uses about 922 MB for four hours; processing models require
+additional memory. Other encodings use the browser's native audio decoder.
+
+Run `npm run test:audio` for resampling and WAV validation checks. To exercise
+the streaming worker against local fixtures, run
+`node scripts/test-decode.mjs /path/to/recording.mp3 /path/to/recording.wav`.
+Test recordings are never committed or included in the site build.
