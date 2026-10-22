@@ -40,7 +40,7 @@ loader with mirrors and checksums, diarization, and SRT/VTT export.
 
 ## Try it
 
-The public build is served from GitHub Pages (see the repository's *Pages* URL). Open it, drop a
+The public build is served from GitHub Pages (see the repository's _Pages_ URL). Open it, drop a
 file, press **Transcribe Audio**. The first run downloads the model (320 MB for GigaAM, 100–450 MB
 for Whisper, 40 MB for diarization); the next runs start instantly.
 
@@ -133,3 +133,7 @@ Run `npm run test:audio` for resampling and WAV validation checks. To exercise
 the streaming worker against local fixtures, run
 `node scripts/test-decode.mjs /path/to/recording.mp3 /path/to/recording.wav`.
 Test recordings are never committed or included in the site build.
+
+## Development standard
+
+This repository adopts version 0.4.0 of the shared development standard. Read the [English guide](docs/en/development-standard.md) or [Russian guide](docs/ru/development-standard.md). The local toolkit checks staged secrets, changed-file formatting and bilingual documentation before merge. Existing product CI remains in place. Adoption is in progress; product acceptance and legacy-document translation are recorded separately in .repo-policy.json.
